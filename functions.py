@@ -1,6 +1,8 @@
 import streamlit as st
 import os
 import time
+import subprocess
+import shutil
 from pathlib import Path
 # import wave  # PyAudio関連なので不要
 # import pyaudio  # PyAudioを無効化
@@ -123,6 +125,31 @@ def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
             else:
                 st.audio(audio_bytes, format='audio/wav', autoplay=True)
             
+            # MP4形式でのダウンロード機能を追加
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                # MP3からMP4への変換とダウンロード
+                mp4_file_path = convert_mp3_to_mp4(audio_output_file_path)
+                if mp4_file_path:
+                    with open(mp4_file_path, 'rb') as mp4_file:
+                        mp4_bytes = mp4_file.read()
+                        st.download_button(
+                            label="🎥 MP4ダウンロード",
+                            data=mp4_bytes,
+                            file_name=f"ai_response_{int(time.time())}.mp4",
+                            mime="video/mp4",
+                            help="AI回答音声をMP4形式でダウンロード"
+                        )
+                else:
+                    # MP4変換に失敗した場合はMP3でダウンロード
+                    st.download_button(
+                        label="🎵 MP3ダウンロード",
+                        data=audio_bytes,
+                        file_name=f"ai_response_{int(time.time())}.mp3",
+                        mime="audio/mp3",
+                        help="AI回答音声をMP3形式でダウンロード"
+                    )
+            
     except Exception as e:
         st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
         st.info("音声が利用できませんが、テキストでの回答は表示されています。")
@@ -130,6 +157,50 @@ def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
     
     # 音声ファイルは即座に削除せず、セッション終了時まで保持
     # （ユーザーが複数回再生できるようにするため）
+
+def convert_mp3_to_mp4(mp3_file_path):
+    """
+    MP3ファイルをMP4形式に変換（音声のみの動画ファイル）
+    Args:
+        mp3_file_path: MP3ファイルのパス
+    Returns:
+        str: MP4ファイルのパス（変換失敗時はNone）
+    """
+    try:
+        # MP4ファイルパスを生成
+        mp4_file_path = mp3_file_path.replace('.mp3', '.mp4')
+        
+        # FFmpegが利用可能かチェック
+        import subprocess
+        import shutil
+        
+        if shutil.which('ffmpeg') is None:
+            # FFmpegが利用できない場合は、簡易的にMP3をMP4コンテナに入れる
+            st.warning("⚠️ FFmpegが見つかりません。MP3形式でのダウンロードになります。")
+            return None
+        
+        # FFmpegを使用してMP3をMP4に変換
+        cmd = [
+            'ffmpeg', '-y',  # -y: 上書き許可
+            '-i', mp3_file_path,  # 入力ファイル
+            '-c:a', 'aac',  # 音声コーデックをAACに
+            '-b:a', '128k',  # ビットレート
+            '-f', 'mp4',  # 出力フォーマット
+            mp4_file_path  # 出力ファイル
+        ]
+        
+        # FFmpeg実行
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0 and os.path.exists(mp4_file_path):
+            return mp4_file_path
+        else:
+            st.warning(f"⚠️ MP4変換に失敗しました。MP3形式でのダウンロードになります。")
+            return None
+            
+    except Exception as e:
+        st.warning(f"⚠️ MP4変換でエラーが発生しました: {e}")
+        return None
 
 def play_wav(audio_output_file_path, speed=1.0):
     """
