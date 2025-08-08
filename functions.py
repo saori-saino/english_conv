@@ -112,25 +112,19 @@ def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
     if speed != 1.0:
         st.info(f"⚠️ 音声速度変更機能は現在無効になっています（指定速度: {speed}x）")
     
-    # 日常英会話用の操作指示
-    st.success("🗣️ **AI回答の音声を自動再生します**")
-    
     # Streamlitの音声再生機能を使用（自動再生を試行）
     try:
         with open(audio_output_file_path, 'rb') as audio_file:
             audio_bytes = audio_file.read()
             
-            # まず自動再生を試行
+            # まず自動再生を試行（メッセージなしでシンプルに）
             if audio_output_file_path.endswith('.mp3'):
                 st.audio(audio_bytes, format='audio/mp3', autoplay=True)
             else:
                 st.audio(audio_bytes, format='audio/wav', autoplay=True)
             
-            # 自動再生の案内と手動再生のオプション
-            st.info("🔊 **AI回答が自動再生されます。聞こえない場合は上記の ▶️ ボタンを押してください**")
-            
-            # ブラウザで自動再生が無効な場合の追加情報
-            with st.expander("🔧 音声が自動再生されない場合"):
+            # ブラウザで自動再生が無効な場合の追加情報（expander内に格納）
+            with st.expander("🔧 音声が聞こえない場合"):
                 st.markdown("""
                 **ブラウザの自動再生が無効になっている可能性があります:**
                 1. 上記の音声プレーヤーで ▶️ ボタンを手動でクリックしてください
