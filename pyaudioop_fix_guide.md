@@ -78,3 +78,19 @@ pipwin install pyaudio
    - フォールバック機能によりLangChain失敗時も動作継続
 
 **最終ステータス**: すべてのエラーが解決され、アプリケーションは完全に動作可能です。
+
+## 🆕 Streamlit Cloudデプロイメント問題の修正
+
+### 8. **python-dotenvバージョン競合エラーの修正**
+   - 問題: `requirements.txt`に`python-dotenv==1.0.0`と`python-dotenv==1.0.1`が重複記載
+   - 解決策: Streamlit Cloud用に最小限の依存関係のみを記載した新しい`requirements.txt`を作成
+   - 削除したパッケージ: `audio-recorder-streamlit`, `PyAudio`, `pydub`, `streamlit-webrtc`など不要な依存関係
+   - 最新状態: 5つの必須パッケージのみ（streamlit, openai, langchain, langchain-openai, python-dotenv）
+
+### Streamlit Cloudデプロイメント手順
+1. **requirements.txtの最小化**: 不要な依存関係をすべて削除
+2. **Secrets設定**: Streamlit Cloudダッシュボードで`OPENAI_API_KEY`を設定
+3. **Python版互換性**: Python 3.13.5で開発、Streamlit Cloudは3.9-3.11をサポート
+4. **音声機能制限**: Streamlit Cloudでは`st.audio_input()`の音声ファイル処理に制限がある可能性
+
+**Streamlit Cloudデプロイ準備完了**: 依存関係の競合が解決され、デプロイ可能な状態です。

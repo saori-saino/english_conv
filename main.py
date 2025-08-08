@@ -14,7 +14,12 @@ from langchain.prompts import (
 from langchain.schema import SystemMessage
 from openai import OpenAI
 from langchain_openai import ChatOpenAI
-from dotenv import load_dotenv
+# Streamlit Cloud対応：python-dotenvの代わりにStreamlit Secretsを使用
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 import functions as ft
 import constants as ct
 
@@ -29,21 +34,42 @@ except Exception as e:
 
 
 # 各種設定
-# .envファイルを明示的に読み込み
-env_path = Path('.') / '.env'
-load_dotenv(dotenv_path=env_path, override=True)
+# .envファイルを明示的に読み込み（ローカル環境のみ）
+if DOTENV_AVAILABLE:
+    env_path = Path('.') / '.env'
+    load_dotenv(dotenv_path=env_path, override=True)
 
-# 代替方法：.envファイルを手動で読み込み
-if "OPENAI_API_KEY" not in os.environ:
-    env_file = Path(".env")
-    if env_file.exists():
-        with open(env_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('OPENAI_API_KEY=') and not line.startswith('#'):
-                    key_value = line.split('=', 1)
-                    if len(key_value) == 2:
-                        os.environ['OPENAI_API_KEY'] = key_value[1].strip('"\'')
+# API key の設定（Streamlit Cloud + ローカル対応）
+def get_openai_api_key():
+    # 1. Streamlit Secrets
+    try:
+        if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+            return st.secrets['OPENAI_API_KEY']
+    except Exception:
+        pass
+    
+    # 2. 環境変数
+    if "OPENAI_API_KEY" in os.environ:
+        return os.environ["OPENAI_API_KEY"]
+    
+    # 3. .envファイル（ローカル開発用）
+    if DOTENV_AVAILABLE:
+        env_file = Path(".env")
+        if env_file.exists():
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('OPENAI_API_KEY=') and not line.startswith('#'):
+                        key_value = line.split('=', 1)
+                        if len(key_value) == 2:
+                            return key_value[1].strip('"\'')
+    
+    return None
+
+# OpenAI API key の設定
+api_key = get_openai_api_key()
+if api_key:
+    os.environ['OPENAI_API_KEY'] = api_key
 
 st.set_page_config(
     page_title=ct.APP_NAME
