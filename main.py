@@ -404,10 +404,11 @@ if st.session_state.start_flg:
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(audio_input_text)
 
-            with st.spinner("回答の音声読み上げ準備中..."):
+            with st.spinner("🤖 AI回答を生成中..."):
                 # ユーザー入力値をLLMに渡して回答取得
                 llm_response = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
-                
+            
+            with st.spinner("🎤 音声を生成中..."):
                 # LLMからの回答を音声データに変換
                 llm_response_audio = st.session_state.openai_obj.audio.speech.create(
                 model="tts-1",
@@ -419,8 +420,8 @@ if st.session_state.start_flg:
             audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
             actual_file_path = ft.save_to_wav(llm_response_audio.content, audio_output_file_path)
 
-            # 音声ファイルの読み上げ
-            ft.play_wav(actual_file_path, speed=st.session_state.speed)
+            # 音声ファイルの読み上げ（日常英会話モード専用自動再生）
+            ft.play_wav_auto_for_conversation(actual_file_path, speed=st.session_state.speed)
 
             # AIメッセージの画面表示とリストへの追加
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):

@@ -100,6 +100,55 @@ def save_to_wav(llm_response_audio, audio_output_file_path):
         st.error(f"音声ファイルの保存に失敗しました: {e}")
         raise
 
+def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
+    """
+    日常英会話モード専用の音声自動再生
+    Args:
+        audio_output_file_path: 音声ファイルのパス
+        speed: 再生速度（現在は無効、pydub不使用のため）
+    """
+    
+    # 速度変更機能の案内
+    if speed != 1.0:
+        st.info(f"⚠️ 音声速度変更機能は現在無効になっています（指定速度: {speed}x）")
+    
+    # 日常英会話用の操作指示
+    st.success("🗣️ **AI回答の音声を自動再生します**")
+    
+    # Streamlitの音声再生機能を使用（自動再生を試行）
+    try:
+        with open(audio_output_file_path, 'rb') as audio_file:
+            audio_bytes = audio_file.read()
+            
+            # まず自動再生を試行
+            if audio_output_file_path.endswith('.mp3'):
+                st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+            else:
+                st.audio(audio_bytes, format='audio/wav', autoplay=True)
+            
+            # 自動再生の案内と手動再生のオプション
+            st.info("🔊 **AI回答が自動再生されます。聞こえない場合は上記の ▶️ ボタンを押してください**")
+            
+            # ブラウザで自動再生が無効な場合の追加情報
+            with st.expander("🔧 音声が自動再生されない場合"):
+                st.markdown("""
+                **ブラウザの自動再生が無効になっている可能性があります:**
+                1. 上記の音声プレーヤーで ▶️ ボタンを手動でクリックしてください
+                2. ブラウザの設定で音声自動再生を許可してください
+                3. 音量設定を確認してください
+                
+                **Chrome/Edge:** 設定 → プライバシーとセキュリティ → サイトの設定 → 音声
+                **Firefox:** 設定 → プライバシーとセキュリティ → 許可設定 → 自動再生
+                """)
+            
+    except Exception as e:
+        st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
+        st.info("音声が利用できませんが、テキストでの回答は表示されています。")
+        return
+    
+    # 音声ファイルは即座に削除せず、セッション終了時まで保持
+    # （ユーザーが複数回再生できるようにするため）
+
 def play_wav(audio_output_file_path, speed=1.0):
     """
     音声ファイルの再生（手動再生推奨）
