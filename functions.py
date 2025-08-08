@@ -40,6 +40,28 @@ def record_audio(audio_input_file_path):
         st.info("音声を録音してください。")
         return False
 
+def record_audio_for_shadowing(audio_input_file_path):
+    """
+    シャドーイング専用の音声入力（重複メッセージを避ける）
+    """
+    
+    st.subheader("🎯 シャドーイング音声入力")
+    st.info("👆 上記の問題文音声を聞いた後、同じ内容を話してください")
+    
+    # Streamlitの標準音声入力を使用
+    audio_bytes = st.audio_input("シャドーイング用音声を録音してください")
+    
+    if audio_bytes is not None:
+        # 音声ファイルを保存
+        with open(audio_input_file_path, "wb") as f:
+            f.write(audio_bytes.getvalue())
+        
+        st.success("✅ シャドーイング音声が正常に録音されました！")
+        return True
+    else:
+        st.info("🔴 シャドーイング用の音声を録音してください。")
+        return False
+
 def transcribe_audio(audio_input_file_path):
     """
     音声入力ファイルから文字起こしテキストを取得
@@ -149,7 +171,7 @@ def create_chain(system_template):
 
 def create_problem_and_play_audio():
     """
-    問題生成と音声ファイルの再生
+    問題生成と音声ファイルの再生（ディクテーション用）
     Args:
         chain: 問題文生成用のChain
         speed: 再生速度（1.0が通常速度、0.5で半分の速さ、2.0で倍速など）
@@ -176,6 +198,33 @@ def create_problem_and_play_audio():
 
     return problem, llm_response_audio
 
+def create_problem_and_play_audio_for_shadowing():
+    """
+    シャドーイング専用の問題生成と音声ファイルの再生
+    """
+
+    # 問題文を生成するChainを実行し、問題文を取得
+    problem = st.session_state.chain_create_problem.predict(input="")
+
+    # LLMからの回答を音声データに変換
+    llm_response_audio = st.session_state.openai_obj.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=problem
+    )
+
+    # 音声ファイルの作成（mp3形式で保存）
+    audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
+    actual_file_path = save_to_wav(llm_response_audio.content, audio_output_file_path)
+
+    # セッション状態に音声ファイルパスを保存
+    st.session_state.current_audio_file = actual_file_path
+    
+    # シャドーイング専用の音声プレーヤーを表示
+    display_audio_player_for_shadowing()
+
+    return problem, llm_response_audio
+
 def display_audio_player():
     """
     音声プレーヤーを表示する関数（st.rerun()後も呼び出し可能）
@@ -190,6 +239,46 @@ def display_audio_player():
         
         # 音声表示後はフラグをリセット（重複表示を防ぐ）
         st.session_state.audio_ready = False
+
+def display_audio_player_for_shadowing():
+    """
+    シャドーイング専用の音声プレーヤー表示
+    """
+    if hasattr(st.session_state, 'current_audio_file') and st.session_state.current_audio_file:
+        # シャドーイング用の追加UI表示
+        st.markdown("### 🎯 シャドーイング問題")
+        st.info("🎧 **まず音声を聞いて、その後同じ内容を話してください**")
+        
+        # 音声ファイルの読み上げ（シャドーイング用に最適化）
+        play_wav_for_shadowing(st.session_state.current_audio_file, st.session_state.speed)
+
+def play_wav_for_shadowing(audio_output_file_path, speed=1.0):
+    """
+    シャドーイング専用の音声再生（メッセージを簡潔にする）
+    """
+    
+    # 速度変更機能の案内
+    if speed != 1.0:
+        st.warning(f"⚠️ 音声速度変更機能は現在無効になっています（指定速度: {speed}x）")
+    
+    # シャドーイング用の操作指示
+    st.success("🎵 **シャドーイング問題文の音声**")
+    st.info("👇 **音声を聞いてから、同じ内容を録音してください**")
+    
+    # Streamlitの音声再生機能を使用
+    try:
+        with open(audio_output_file_path, 'rb') as audio_file:
+            audio_bytes = audio_file.read()
+            
+            # 手動再生のみ
+            if audio_output_file_path.endswith('.mp3'):
+                st.audio(audio_bytes, format='audio/mp3', autoplay=False)
+            else:
+                st.audio(audio_bytes, format='audio/wav', autoplay=False)
+            
+    except Exception as e:
+        st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
+        return
 
 def create_evaluation():
     """

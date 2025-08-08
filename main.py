@@ -440,13 +440,13 @@ if st.session_state.start_flg:
         
         if not st.session_state.shadowing_audio_input_flg:
             with st.spinner('問題文生成中...'):
-                st.session_state.problem, llm_response_audio = ft.create_problem_and_play_audio()
+                st.session_state.problem, llm_response_audio = ft.create_problem_and_play_audio_for_shadowing()
 
         # 音声入力を受け取って音声ファイルを作成
         st.session_state.shadowing_audio_input_flg = True
         audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
         
-        if ft.record_audio(audio_input_file_path):
+        if ft.record_audio_for_shadowing(audio_input_file_path):
             st.session_state.shadowing_audio_input_flg = False
 
             with st.spinner('音声入力をテキストに変換中...'):
