@@ -97,6 +97,8 @@ if "messages" not in st.session_state:
     st.session_state.dictation_evaluation_first_flg = True
     st.session_state.chat_open_flg = False
     st.session_state.problem = ""
+    st.session_state.audio_ready = False
+    st.session_state.current_audio_file = None
     
     # OpenAI関連の初期化も一度だけ実行
 
@@ -321,6 +323,8 @@ if st.session_state.dictation_flg:
 
 # 「ディクテーション」モードのチャット入力受付時に実行
 if st.session_state.chat_open_flg:
+    # 音声プレーヤーを表示（st.rerun()の影響を受けない場所）
+    ft.display_audio_player()
     st.info("AIが読み上げた音声を、画面下部のチャット欄からそのまま入力・送信してください。")
 
 st.session_state.dictation_chat_message = st.chat_input("※「ディクテーション」選択時以外は送信不可")

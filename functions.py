@@ -170,14 +170,26 @@ def create_problem_and_play_audio():
     audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
     actual_file_path = save_to_wav(llm_response_audio.content, audio_output_file_path)
 
-    # ディクテーション用の追加UI表示
-    st.markdown("### 📝 ディクテーション問題")
-    st.info("🎧 **音声を聞いて、聞こえた内容を正確に入力してください**")
-    
-    # 音声ファイルの読み上げ
-    play_wav(actual_file_path, st.session_state.speed)
+    # セッション状態に音声ファイルパスを保存（st.rerun()後も持続するように）
+    st.session_state.current_audio_file = actual_file_path
+    st.session_state.audio_ready = True
 
     return problem, llm_response_audio
+
+def display_audio_player():
+    """
+    音声プレーヤーを表示する関数（st.rerun()後も呼び出し可能）
+    """
+    if hasattr(st.session_state, 'audio_ready') and st.session_state.audio_ready and hasattr(st.session_state, 'current_audio_file'):
+        # ディクテーション用の追加UI表示
+        st.markdown("### 📝 ディクテーション問題")
+        st.info("🎧 **音声を聞いて、聞こえた内容を正確に入力してください**")
+        
+        # 音声ファイルの読み上げ
+        play_wav(st.session_state.current_audio_file, st.session_state.speed)
+        
+        # 音声表示後はフラグをリセット（重複表示を防ぐ）
+        st.session_state.audio_ready = False
 
 def create_evaluation():
     """
