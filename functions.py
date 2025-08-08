@@ -125,30 +125,34 @@ def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
             else:
                 st.audio(audio_bytes, format='audio/wav', autoplay=True)
             
-            # MP4形式でのダウンロード機能を追加
+            # 音声ダウンロード機能を追加
             col1, col2 = st.columns([3, 1])
             with col2:
-                # MP3からMP4への変換とダウンロード
+                # MP3ダウンロードボタンを常に表示（確実に.mp3拡張子付き）
+                timestamp = int(time.time())
+                mp3_filename = f"ai_response_{timestamp}.mp3"
+                
+                st.download_button(
+                    label="� MP3ダウンロード",
+                    data=audio_bytes,
+                    file_name=mp3_filename,
+                    mime="audio/mp3",
+                    help="AI回答音声をMP3形式でダウンロード"
+                )
+                
+                # MP4形式でのダウンロード機能も提供（オプション）
                 mp4_file_path = convert_mp3_to_mp4(audio_output_file_path)
                 if mp4_file_path:
                     with open(mp4_file_path, 'rb') as mp4_file:
                         mp4_bytes = mp4_file.read()
+                        mp4_filename = f"ai_response_{timestamp}.mp4"
                         st.download_button(
-                            label="🎥 MP4ダウンロード",
+                            label="� MP4ダウンロード",
                             data=mp4_bytes,
-                            file_name=f"ai_response_{int(time.time())}.mp4",
+                            file_name=mp4_filename,
                             mime="video/mp4",
                             help="AI回答音声をMP4形式でダウンロード"
                         )
-                else:
-                    # MP4変換に失敗した場合はMP3でダウンロード
-                    st.download_button(
-                        label="🎵 MP3ダウンロード",
-                        data=audio_bytes,
-                        file_name=f"ai_response_{int(time.time())}.mp3",
-                        mime="audio/mp3",
-                        help="AI回答音声をMP3形式でダウンロード"
-                    )
             
     except Exception as e:
         st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
