@@ -5,7 +5,7 @@ from pathlib import Path
 # import wave  # PyAudio関連なので不要
 # import pyaudio  # PyAudioを無効化
 # from pydub import AudioSegment  # pyaudioopエラーを回避するため無効化
-# from audiorecorder import audiorecorder  # pyaudioopエラーを回避するため無効化
+from audiorecorder import audiorecorder
 import numpy as np
 # from scipy.io.wavfile import write  # 未使用のため無効化
 from langchain.prompts import (
@@ -21,24 +21,22 @@ import constants as ct
 
 def record_audio(audio_input_file_path):
     """
-    音声入力を受け取って音声ファイルを作成（Streamlit標準機能使用）
+    音声入力を受け取って音声ファイルを作成
     """
-    
-    st.subheader("🎤 音声入力")
-    
-    # Streamlitの標準音声入力を使用
-    audio_bytes = st.audio_input("音声を録音してください")
-    
-    if audio_bytes is not None:
-        # 音声ファイルを保存
-        with open(audio_input_file_path, "wb") as f:
-            f.write(audio_bytes.getvalue())
-        
-        st.success("音声が正常に録音されました！")
-        return True
+
+    audio = audiorecorder(
+        start_prompt="発話開始",
+        pause_prompt="やり直す",
+        stop_prompt="発話終了",
+        start_style={"color":"white", "background-color":"black"},
+        pause_style={"color":"gray", "background-color":"white"},
+        stop_style={"color":"white", "background-color":"black"}
+    )
+
+    if len(audio) > 0:
+        audio.export(audio_input_file_path, format="wav")
     else:
-        st.info("音声を録音してください。")
-        return False
+        st.stop()
 
 def transcribe_audio(audio_input_file_path):
     """
@@ -145,12 +143,12 @@ def create_problem_and_play_audio():
         input=problem
     )
 
-    # 音声ファイルの作成（mp3形式で保存）
-    audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
-    actual_file_path = save_to_wav(llm_response_audio.content, audio_output_file_path)
+    # 音声ファイルの作成
+    audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.wav"
+    save_to_wav(llm_response_audio.content, audio_output_file_path)
 
     # 音声ファイルの読み上げ
-    play_wav(actual_file_path, st.session_state.speed)
+    play_wav(audio_output_file_path, st.session_state.speed)
 
     return problem, llm_response_audio
 
@@ -162,44 +160,3 @@ def create_evaluation():
     llm_response_evaluation = st.session_state.chain_evaluation.predict(input="")
 
     return llm_response_evaluation
-
-# LangChain代替関数（Pydantic互換性問題の回避用）
-def create_simple_openai_client(api_key):
-    """
-    単純なOpenAI APIクライアントを作成（LangChain代替）
-    """
-    from openai import OpenAI
-    return OpenAI(api_key=api_key)
-
-def simple_chat_completion(client, messages, model="gpt-4o-mini", temperature=0.5):
-    """
-    OpenAI API直接呼び出しでチャット補完（LangChain代替）
-    """
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"API呼び出しエラー: {e}"
-
-def create_conversation_messages(system_prompt, conversation_history, user_input):
-    """
-    会話履歴から OpenAI API用のメッセージ形式を作成
-    """
-    messages = [
-        {"role": "system", "content": system_prompt}
-    ]
-    
-    # 会話履歴を追加
-    for msg in conversation_history:
-        if hasattr(msg, 'content'):
-            role = "assistant" if hasattr(msg, 'type') and msg.type == "ai" else "user"
-            messages.append({"role": role, "content": msg.content})
-    
-    # 現在のユーザー入力を追加
-    messages.append({"role": "user", "content": user_input})
-    
-    return messages

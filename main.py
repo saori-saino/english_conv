@@ -18,9 +18,33 @@ from dotenv import load_dotenv
 import functions as ft
 import constants as ct
 
+# Pydantic互換性の問題を解決
+try:
+    # ChatOpenAIクラスのモデル再構築を強制実行
+    from langchain_core.language_models.base import BaseLanguageModel
+    ChatOpenAI.model_rebuild()
+except Exception as e:
+    print(f"Warning: ChatOpenAI model rebuild failed: {e}")
+    # 継続して実行
+
 
 # 各種設定
-load_dotenv()
+# .envファイルを明示的に読み込み
+env_path = Path('.') / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
+
+# 代替方法：.envファイルを手動で読み込み
+if "OPENAI_API_KEY" not in os.environ:
+    env_file = Path(".env")
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('OPENAI_API_KEY=') and not line.startswith('#'):
+                    key_value = line.split('=', 1)
+                    if len(key_value) == 2:
+                        os.environ['OPENAI_API_KEY'] = key_value[1].strip('"\'')
+
 st.set_page_config(
     page_title=ct.APP_NAME
 )
@@ -48,16 +72,163 @@ if "messages" not in st.session_state:
     st.session_state.chat_open_flg = False
     st.session_state.problem = ""
     
-    st.session_state.openai_obj = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    st.session_state.llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.5)
-    st.session_state.memory = ConversationSummaryBufferMemory(
-        llm=st.session_state.llm,
-        max_token_limit=1000,
-        return_messages=True
-    )
+    # OpenAI関連の初期化も一度だけ実行
 
-    # モード「日常英会話」用のChain作成
-    st.session_state.chain_basic_conversation = ft.create_chain(ct.SYSTEM_TEMPLATE_BASIC_CONVERSATION)
+# OpenAI API とLangChainの初期化（必要時のみ）
+if "chain_basic_conversation" not in st.session_state:
+    st.info("🔄 OpenAI APIとLangChainを初期化中...")
+    
+    # OpenAI APIキーの取得（複数の方法を試行）
+    api_key = None
+    
+    # 方法1: 環境変数から直接取得
+    api_key = os.environ.get("OPENAI_API_KEY")
+    
+    # 方法2: .envファイルから手動読み込み
+    if not api_key:
+        env_file = Path(".env")
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('OPENAI_API_KEY=') and not line.startswith('#'):
+                            key_value = line.split('=', 1)
+                            if len(key_value) == 2:
+                                api_key = key_value[1].strip('"\'')
+                                os.environ['OPENAI_API_KEY'] = api_key
+                                break
+            except Exception as e:
+                st.warning(f".envファイル読み込みエラー: {e}")
+    
+    # 方法3: Streamlit secretsから取得
+    if not api_key:
+        try:
+            if hasattr(st, 'secrets') and "OPENAI_API_KEY" in st.secrets:
+                api_key = st.secrets["OPENAI_API_KEY"]
+        except Exception:
+            pass
+    
+    # APIキーの検証
+    if not api_key or api_key == "your-openai-api-key-here" or len(api_key) < 20:
+        st.error("🔑 OpenAI APIキーが設定されていません。")
+        st.info("""
+        **APIキーの設定方法:**
+        1. OpenAIのWebサイト (https://platform.openai.com/account/api-keys) でAPIキーを取得
+        2. 以下のいずれかの方法で設定:
+           - 環境変数: `OPENAI_API_KEY=your_key`
+           - `.streamlit/secrets.toml` ファイルに追加
+        """)
+        st.stop()
+    
+    try:
+        st.session_state.openai_obj = OpenAI(api_key=api_key)
+        
+        # ChatOpenAIの初期化 - 段階的に異なる方法を試行
+        llm_initialized = False
+        
+        # 方法1: 基本的な初期化
+        if not llm_initialized:
+            try:
+                st.session_state.llm = ChatOpenAI(
+                    api_key=api_key,
+                    model="gpt-4o-mini",
+                    temperature=0.5
+                )
+                llm_initialized = True
+                st.success("✅ ChatOpenAI初期化成功（方法1）")
+            except Exception as e1:
+                st.warning(f"方法1失敗: {e1}")
+        
+        # 方法2: openai_api_keyパラメータを使用
+        if not llm_initialized:
+            try:
+                st.session_state.llm = ChatOpenAI(
+                    openai_api_key=api_key,
+                    model="gpt-4o-mini",
+                    temperature=0.5
+                )
+                llm_initialized = True
+                st.success("✅ ChatOpenAI初期化成功（方法2）")
+            except Exception as e2:
+                st.warning(f"方法2失敗: {e2}")
+        
+        # 方法3: 環境変数に依存する方法
+        if not llm_initialized:
+            try:
+                os.environ['OPENAI_API_KEY'] = api_key
+                st.session_state.llm = ChatOpenAI(
+                    model="gpt-4o-mini",
+                    temperature=0.5
+                )
+                llm_initialized = True
+                st.success("✅ ChatOpenAI初期化成功（方法3）")
+            except Exception as e3:
+                st.warning(f"方法3失敗: {e3}")
+        
+        # 方法4: 旧形式のパラメータ名を使用
+        if not llm_initialized:
+            try:
+                st.session_state.llm = ChatOpenAI(
+                    openai_api_key=api_key,
+                    model_name="gpt-4o-mini",
+                    temperature=0.5
+                )
+                llm_initialized = True
+                st.success("✅ ChatOpenAI初期化成功（方法4 - 旧形式）")
+            except Exception as e4:
+                st.warning(f"方法4失敗: {e4}")
+        
+        if not llm_initialized:
+            raise Exception("すべてのChatOpenAI初期化方法が失敗しました")
+        
+        # LangChainのメモリとチェーンを初期化
+        try:
+            st.session_state.memory = ConversationSummaryBufferMemory(
+                llm=st.session_state.llm,
+                max_token_limit=1000,
+                return_messages=True
+            )
+
+            # モード「日常英会話」用のChain作成
+            st.session_state.chain_basic_conversation = ft.create_chain(ct.SYSTEM_TEMPLATE_BASIC_CONVERSATION)
+            st.session_state.use_langchain = True
+            st.success("✅ LangChainチェーン初期化成功")
+            
+        except Exception as chain_error:
+            st.warning(f"⚠️ LangChainチェーン作成失敗、直接OpenAI API使用モードに切り替えます: {chain_error}")
+            st.session_state.use_langchain = False
+            st.session_state.conversation_history = []  # 代替の会話履歴管理
+            
+            # フォールバック用のダミーチェーンオブジェクトを作成
+            class FallbackChain:
+                def __init__(self, api_key):
+                    self.api_key = api_key
+                    self.client = ft.create_simple_openai_client(api_key)
+                
+                def predict(self, input):
+                    try:
+                        # シンプルな会話システムプロンプト
+                        system_prompt = """あなたは優しく親切な英会話講師です。
+ユーザーの英語に対して自然で適切な返答をしてください。
+英語で返答し、発音しやすい文章を心がけてください。"""
+                        
+                        messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": input}
+                        ]
+                        
+                        return ft.simple_chat_completion(self.client, messages)
+                    except Exception as e:
+                        return f"申し訳ございません。応答の生成でエラーが発生しました: {e}"
+            
+            st.session_state.chain_basic_conversation = FallbackChain(api_key)
+            st.info("✅ フォールバックモードで初期化完了")
+        
+    except Exception as e:
+        st.error(f"🚨 OpenAI API初期化エラー: {e}")
+        st.info("APIキーが正しく設定されているか確認してください。")
+        st.stop()
 
 # 初期表示
 # col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
@@ -192,42 +363,42 @@ if st.session_state.start_flg:
     if st.session_state.mode == ct.MODE_1:
         # 音声入力を受け取って音声ファイルを作成
         audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
-        ft.record_audio(audio_input_file_path)
+        
+        if ft.record_audio(audio_input_file_path):
+            # 音声入力ファイルから文字起こしテキストを取得
+            with st.spinner('音声入力をテキストに変換中...'):
+                transcript = ft.transcribe_audio(audio_input_file_path)
+                audio_input_text = transcript.text
 
-        # 音声入力ファイルから文字起こしテキストを取得
-        with st.spinner('音声入力をテキストに変換中...'):
-            transcript = ft.transcribe_audio(audio_input_file_path)
-            audio_input_text = transcript.text
+            # 音声入力テキストの画面表示
+            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+                st.markdown(audio_input_text)
 
-        # 音声入力テキストの画面表示
-        with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-            st.markdown(audio_input_text)
-
-        with st.spinner("回答の音声読み上げ準備中..."):
-            # ユーザー入力値をLLMに渡して回答取得
-            llm_response = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
-            
-            # LLMからの回答を音声データに変換
-            llm_response_audio = st.session_state.openai_obj.audio.speech.create(
+            with st.spinner("回答の音声読み上げ準備中..."):
+                # ユーザー入力値をLLMに渡して回答取得
+                llm_response = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
+                
+                # LLMからの回答を音声データに変換
+                llm_response_audio = st.session_state.openai_obj.audio.speech.create(
                 model="tts-1",
                 voice="alloy",
                 input=llm_response
             )
 
-            # 一旦mp3形式で音声ファイル作成後、wav形式に変換
-            audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.wav"
-            ft.save_to_wav(llm_response_audio.content, audio_output_file_path)
+            # mp3形式で音声ファイル作成
+            audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
+            actual_file_path = ft.save_to_wav(llm_response_audio.content, audio_output_file_path)
 
-        # 音声ファイルの読み上げ
-        ft.play_wav(audio_output_file_path, speed=st.session_state.speed)
+            # 音声ファイルの読み上げ
+            ft.play_wav(actual_file_path, speed=st.session_state.speed)
 
-        # AIメッセージの画面表示とリストへの追加
-        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(llm_response)
+            # AIメッセージの画面表示とリストへの追加
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(llm_response)
 
-        # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
-        st.session_state.messages.append({"role": "user", "content": audio_input_text})
-        st.session_state.messages.append({"role": "assistant", "content": llm_response})
+            # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
+            st.session_state.messages.append({"role": "user", "content": audio_input_text})
+            st.session_state.messages.append({"role": "assistant", "content": llm_response})
 
 
     # モード：「シャドーイング」
@@ -244,44 +415,45 @@ if st.session_state.start_flg:
         # 音声入力を受け取って音声ファイルを作成
         st.session_state.shadowing_audio_input_flg = True
         audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
-        ft.record_audio(audio_input_file_path)
-        st.session_state.shadowing_audio_input_flg = False
-
-        with st.spinner('音声入力をテキストに変換中...'):
-            # 音声入力ファイルから文字起こしテキストを取得
-            transcript = ft.transcribe_audio(audio_input_file_path)
-            audio_input_text = transcript.text
-
-        # AIメッセージとユーザーメッセージの画面表示
-        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(st.session_state.problem)
-        with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-            st.markdown(audio_input_text)
         
-        # LLMが生成した問題文と音声入力値をメッセージリストに追加
-        st.session_state.messages.append({"role": "assistant", "content": st.session_state.problem})
-        st.session_state.messages.append({"role": "user", "content": audio_input_text})
+        if ft.record_audio(audio_input_file_path):
+            st.session_state.shadowing_audio_input_flg = False
 
-        with st.spinner('評価結果の生成中...'):
-            if st.session_state.shadowing_evaluation_first_flg:
-                system_template = ct.SYSTEM_TEMPLATE_EVALUATION.format(
-                    llm_text=st.session_state.problem,
-                    user_text=audio_input_text
-                )
-                st.session_state.chain_evaluation = ft.create_chain(system_template)
-                st.session_state.shadowing_evaluation_first_flg = False
-            # 問題文と回答を比較し、評価結果の生成を指示するプロンプトを作成
-            llm_response_evaluation = ft.create_evaluation()
-        
-        # 評価結果のメッセージリストへの追加と表示
-        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(llm_response_evaluation)
-        st.session_state.messages.append({"role": "assistant", "content": llm_response_evaluation})
-        st.session_state.messages.append({"role": "other"})
-        
-        # 各種フラグの更新
-        st.session_state.shadowing_flg = True
-        st.session_state.shadowing_count += 1
+            with st.spinner('音声入力をテキストに変換中...'):
+                # 音声入力ファイルから文字起こしテキストを取得
+                transcript = ft.transcribe_audio(audio_input_file_path)
+                audio_input_text = transcript.text
+
+            # AIメッセージとユーザーメッセージの画面表示
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(st.session_state.problem)
+            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+                st.markdown(audio_input_text)
+            
+            # LLMが生成した問題文と音声入力値をメッセージリストに追加
+            st.session_state.messages.append({"role": "assistant", "content": st.session_state.problem})
+            st.session_state.messages.append({"role": "user", "content": audio_input_text})
+
+            with st.spinner('評価結果の生成中...'):
+                if st.session_state.shadowing_evaluation_first_flg:
+                    system_template = ct.SYSTEM_TEMPLATE_EVALUATION.format(
+                        llm_text=st.session_state.problem,
+                        user_text=audio_input_text
+                    )
+                    st.session_state.chain_evaluation = ft.create_chain(system_template)
+                    st.session_state.shadowing_evaluation_first_flg = False
+                # 問題文と回答を比較し、評価結果の生成を指示するプロンプトを作成
+                llm_response_evaluation = ft.create_evaluation()
+            
+            # 評価結果のメッセージリストへの追加と表示
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(llm_response_evaluation)
+            st.session_state.messages.append({"role": "assistant", "content": llm_response_evaluation})
+            st.session_state.messages.append({"role": "other"})
+            
+            # 各種フラグの更新
+            st.session_state.shadowing_flg = True
+            st.session_state.shadowing_count += 1
 
         # 「シャドーイング」ボタンを表示するために再描画
         st.rerun()
