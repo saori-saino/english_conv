@@ -123,18 +123,6 @@ def play_wav_auto_for_conversation(audio_output_file_path, speed=1.0):
             else:
                 st.audio(audio_bytes, format='audio/wav', autoplay=True)
             
-            # ブラウザで自動再生が無効な場合の追加情報（expander内に格納）
-            with st.expander("🔧 音声が聞こえない場合"):
-                st.markdown("""
-                **ブラウザの自動再生が無効になっている可能性があります:**
-                1. 上記の音声プレーヤーで ▶️ ボタンを手動でクリックしてください
-                2. ブラウザの設定で音声自動再生を許可してください
-                3. 音量設定を確認してください
-                
-                **Chrome/Edge:** 設定 → プライバシーとセキュリティ → サイトの設定 → 音声
-                **Firefox:** 設定 → プライバシーとセキュリティ → 許可設定 → 自動再生
-                """)
-            
     except Exception as e:
         st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
         st.info("音声が利用できませんが、テキストでの回答は表示されています。")
