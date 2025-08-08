@@ -80,31 +80,52 @@ def save_to_wav(llm_response_audio, audio_output_file_path):
 
 def play_wav(audio_output_file_path, speed=1.0):
     """
-    音声ファイルの読み上げ（Streamlit使用、pydub不使用版）
+    音声ファイルの再生（手動再生推奨）
     Args:
         audio_output_file_path: 音声ファイルのパス
         speed: 再生速度（現在は無効、pydub不使用のため）
     """
     
-    # 速度変更機能は現在無効（pydub不使用のため）
+    # 速度変更機能の案内
     if speed != 1.0:
-        st.info(f"音声速度変更機能は現在無効になっています（指定速度: {speed}x）")
+        st.warning(f"⚠️ 音声速度変更機能は現在無効になっています（指定速度: {speed}x）")
+    
+    # ユーザーに明確な操作指示を表示
+    st.success("🎵 **問題文の音声が生成されました！**")
+    st.info("👇 **下の音声プレーヤーで ▶️ ボタンを押して問題文を聞いてください**")
     
     # Streamlitの音声再生機能を使用
     try:
         with open(audio_output_file_path, 'rb') as audio_file:
             audio_bytes = audio_file.read()
-            # ファイル拡張子に基づいてフォーマットを決定
+            
+            # 手動再生のみ（autoplay=Falseに変更）
             if audio_output_file_path.endswith('.mp3'):
-                st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+                st.audio(audio_bytes, format='audio/mp3', autoplay=False)
             else:
-                st.audio(audio_bytes, format='audio/wav', autoplay=True)
+                st.audio(audio_bytes, format='audio/wav', autoplay=False)
+            
+            # 追加の案内メッセージ
+            st.markdown("""
+            � **音声が聞こえない場合:**
+            - 音声プレーヤーの ▶️ ボタンを手動でクリックしてください
+            - ブラウザの音量設定を確認してください
+            - スピーカーまたはヘッドフォンの接続を確認してください
+            """)
+            
     except Exception as e:
-        st.error(f"音声ファイルの再生に失敗しました: {e}")
+        st.error(f"🚨 音声ファイルの準備に失敗しました: {e}")
+        st.info("音声が利用できませんが、テキストでの問題文は生成されています。")
+        return
     
-    # 音声ファイルを削除
+    # 音声ファイルは即座に削除せず、セッション終了時まで保持
+    # （ユーザーが複数回再生できるようにするため）
+    
+    # 音声ファイルを削除（一定時間後）
     try:
-        os.remove(audio_output_file_path)
+        # 即座に削除せず、少し待つ（音声再生のため）
+        # os.remove(audio_output_file_path)  # 音声再生完了後まで削除を延期
+        pass
     except Exception as e:
         st.warning(f"音声ファイルの削除に失敗しました: {e}")
 
@@ -149,6 +170,10 @@ def create_problem_and_play_audio():
     audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.mp3"
     actual_file_path = save_to_wav(llm_response_audio.content, audio_output_file_path)
 
+    # ディクテーション用の追加UI表示
+    st.markdown("### 📝 ディクテーション問題")
+    st.info("🎧 **音声を聞いて、聞こえた内容を正確に入力してください**")
+    
     # 音声ファイルの読み上げ
     play_wav(actual_file_path, st.session_state.speed)
 
